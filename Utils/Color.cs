@@ -1,6 +1,6 @@
 ﻿namespace OpenRPG.Utils
 {
-    public class Color
+    public static class Color
     {
         private static string ColorText(string color, string text)
         {
@@ -9,7 +9,7 @@
 
         public static string White(string text)
         {
-            return ColorText("#fffffffe", text);
+            return ColorText("#ffffff", text);
         }
         public static string Black(string text)
         {

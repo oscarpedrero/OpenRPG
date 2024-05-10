@@ -1,66 +1,39 @@
-﻿using HarmonyLib;
+﻿using System;
+using BepInEx.Logging;
+using HarmonyLib;
 using ProjectM;
 using ProjectM.Network;
 using OpenRPG.Systems;
 using OpenRPG.Utils;
 using Stunlock.Network;
-using System;
-using ProjectM.Gameplay.Systems;
 
 namespace OpenRPG.Hooks
 {
-    //[HarmonyPatch(typeof(LoadPersistenceSystemV2), nameof(LoadPersistenceSystemV2.SetLoadState))]
-    //public class PersistenceSystem_Patch
-    //{
-    //    public static void Prefix(ServerStartupState.State loadState, LoadPersistenceSystemV2 __instance)
-    //    {
-    //        if (loadState == ServerStartupState.State.SuccessfulStartup)
-    //        {
-    //            Plugin.Initialize();
-    //        }
-    //    }
-    //}
-
-    //[HarmonyPatch(typeof(SettingsManager), nameof(SettingsManager.VerifyServerGameSettings))]
-    //public class ServerGameSetting_Patch
-    //{
-    //    private static bool isInitialized = false;
-    //    public static void Postfix()
-    //    {
-    //        if (isInitialized == false)
-    //        {
-    //            Plugin.Initialize();
-    //            isInitialized = true;
-    //        }
-    //    }
-    //}
-
-    /* [HarmonyPatch(typeof(HandleGameplayEventsOnHitSystem), nameof(HandleGameplayEventsOnHitSystem.OnUpdate))]
-     public class InitializationPatch
-     {
-         [HarmonyPostfix]
-         public static void OpenRPG_Initialize_Method()
-         {
-             Plugin.Initialize();
-             Plugin.harmony.Unpatch(typeof(HandleGameplayEventsOnHitSystem).GetMethod("OnUpdate"), typeof(InitializationPatch).GetMethod("OpenRPG_Initialize_Method"));
-         }
-     }*/
+    [HarmonyPatch(typeof(SettingsManager), nameof(SettingsManager.VerifyServerGameSettings))]
+    public class ServerGameSetting_Patch
+    {
+        public static void Postfix()
+        {
+        }
+    }
 
     [HarmonyPatch(typeof(GameBootstrap), nameof(GameBootstrap.Start))]
     public static class GameBootstrap_Patch
     {
         public static void Postfix()
         {
-            Plugin.Initialize();
         }
     }
 
     [HarmonyPatch(typeof(GameBootstrap), nameof(GameBootstrap.OnApplicationQuit))]
     public static class GameBootstrapQuit_Patch
     {
-        public static void Prefix()
+        // This needs to be Postfix so that OnUserDisconnected has a chance to work before the database is saved.
+        public static void Postfix()
         {
-            AutoSaveSystem.SaveDatabase();
+            // Save before we quit the server
+            AutoSaveSystem.SaveDatabase(true, false);
+            RandomEncounters.Unload();
         }
     }
 
@@ -71,7 +44,6 @@ namespace OpenRPG.Hooks
         {
             try
             {
-                var em = __instance.EntityManager;
                 var userIndex = __instance._NetEndPointToApprovedUserIndex[netConnectionId];
                 var serverClient = __instance._ApprovedUsersLookup[userIndex];
                 var userEntity = serverClient.UserEntity;
@@ -80,40 +52,22 @@ namespace OpenRPG.Hooks
 
                 if (!isNewVampire)
                 {
-                    if (PvPSystem.isHonorSystemEnabled)
+                    Helper.UpdatePlayerCache(userEntity, userData);
+                    if ((WeaponMasterySystem.IsDecaySystemEnabled && Plugin.WeaponMasterySystemActive) ||
+                        BloodlineSystem.IsDecaySystemEnabled && Plugin.BloodlineSystemActive)
                     {
-                        if (PvPSystem.isHonorTitleEnabled) Helper.RenamePlayer(userEntity, userData.LocalCharacter._Entity, userData.CharacterName);
-
-                        Database.PvPStats.TryGetValue(userData.PlatformId, out var pvpStats);
-                        Database.SiegeState.TryGetValue(userData.PlatformId, out var siegeState);
-
-                        if (pvpStats.Reputation <= -1000)
+                        if (Database.PlayerLogout.TryGetValue(userData.PlatformId, out var playerLogout))
                         {
-                            PvPSystem.HostileON(userData.PlatformId, userData.LocalCharacter._Entity, userEntity);
+                            WeaponMasterySystem.DecayMastery(userEntity, playerLogout);
+                            BloodlineSystem.DecayBloodline(userEntity, playerLogout);
                         }
-                        else
-                        {
-                            if (!siegeState.IsSiegeOn)
-                            {
-                                PvPSystem.HostileOFF(userData.PlatformId, userData.LocalCharacter._Entity);
-                            }
-                        }
-                    }
-                    else
-                    {
-                        var playerName = userData.CharacterName.ToString();
-                        Helper.UpdatePlayerCache(userEntity, playerName, playerName);
-                    }
-                    if (WeaponMasterSystem.isDecaySystemEnabled && WeaponMasterSystem.isMasteryEnabled)
-                    {
-                        WeaponMasterSystem.DecayMastery(userEntity);
                     }
                 }
             }
             catch { }
         }
     }
-
+    
     [HarmonyPatch(typeof(ServerBootstrapSystem), nameof(ServerBootstrapSystem.OnUserDisconnected))]
     public static class OnUserDisconnected_Patch
     {
@@ -124,19 +78,16 @@ namespace OpenRPG.Hooks
                 var userIndex = __instance._NetEndPointToApprovedUserIndex[netConnectionId];
                 var serverClient = __instance._ApprovedUsersLookup[userIndex];
                 var userData = __instance.EntityManager.GetComponentData<User>(serverClient.UserEntity);
-                bool isNewVampire = userData.CharacterName.IsEmpty;
 
-                if (!isNewVampire)
-                {
-                    var playerName = userData.CharacterName.ToString();
-                    Helper.UpdatePlayerCache(serverClient.UserEntity, playerName, playerName, true);
-                    if (WeaponMasterSystem.isDecaySystemEnabled)
-                    {
-                        Database.player_decaymastery_logout[userData.PlatformId] = DateTime.Now;
-                    }
-                }
+                Helper.UpdatePlayerCache(serverClient.UserEntity, userData, true);
+                Database.PlayerLogout[userData.PlatformId] = DateTime.Now;
+                
+                Alliance.RemoveUserOnLogout(userData.LocalCharacter._Entity, userData.CharacterName.ToString());
             }
-            catch { };
+            catch (Exception e)
+            {
+                Plugin.Log(Plugin.LogSystem.Core, LogLevel.Info, $"OnUserDisconnected failed: {e}", true);
+            }
         }
     }
 }

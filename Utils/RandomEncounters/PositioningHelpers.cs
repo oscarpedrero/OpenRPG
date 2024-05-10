@@ -1,14 +1,7 @@
 ﻿using System;
-using ProjectM;
-using ProjectM.Terrain;
 using ProjectM.Tiles;
-using Unity.Collections;
-using Unity.Entities;
 using Unity.Mathematics;
 using UnityEngine;
-using VRising.GameData;
-using static ProjectM.Tiles.TileMapCollisionMath.MapData;
-using static ProjectM.UI.DebugViewData;
 using Random = System.Random;
 
 namespace RandomEncounters.Utils

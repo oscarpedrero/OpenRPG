@@ -2,12 +2,13 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using BepInEx.Logging;
 using OpenRPG.Configuration;
 using OpenRPG.Models.RandomEncounters;
 using OpenRPG.Properties;
-using Unity.Entities;
 using VRising.GameData;
 using VRising.GameData.Models;
+using LogSystem = OpenRPG.Plugin.LogSystem;
 
 namespace OpenRPG.Utils.RandomEncounters
 {
@@ -29,7 +30,7 @@ namespace OpenRPG.Utils.RandomEncounters
         {
             var lowestLevel = playerLevel - RandomEncountersConfig.EncounterMaxLevelDifferenceLower.Value;
             var highestLevel = playerLevel + RandomEncountersConfig.EncounterMaxLevelDifferenceUpper.Value;
-            Plugin.Logger.LogInfo($"Searching an NPC between levels {lowestLevel} and {highestLevel}");
+            Plugin.Log(LogSystem.RandomEncounter, LogLevel.Info, $"Searching an NPC between levels {lowestLevel} and {highestLevel}");
             return _npcs
                 .Where(n => RandomEncountersConfig.Npcs.TryGetValue(n.Id, out var npcSetting) && npcSetting.Value && n.Level >= lowestLevel && n.Level <= highestLevel).ToList()
                 .GetRandomItem();
@@ -57,7 +58,7 @@ namespace OpenRPG.Utils.RandomEncounters
             return _npcs;
         }
 
-        internal static List<UserModel> GetOnlineAdmins(World world)
+        internal static List<UserModel> GetOnlineAdmins()
         {
             return GameData.Users.Online.Where(u => u.IsAdmin).ToList();
         }

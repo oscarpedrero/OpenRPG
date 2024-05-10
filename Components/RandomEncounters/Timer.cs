@@ -1,7 +1,8 @@
 ﻿using System;
+using BepInEx.Logging;
 using OpenRPG.Utils.RandomEncounters;
 using Unity.Entities;
-using VRising.GameData;
+using LogSystem = OpenRPG.Plugin.LogSystem;
 
 namespace OpenRPG.Components.RandomEncounters
 {
@@ -36,7 +37,7 @@ namespace OpenRPG.Components.RandomEncounters
 
         private void GameFrame_OnUpdate()
         {
-            Update(GameData.World);
+            Update(Plugin.Server);
         }
         private void Update(World world)
         {
@@ -53,12 +54,12 @@ namespace OpenRPG.Components.RandomEncounters
             _isRunning = true;
             try
             {
-                Plugin.Logger.LogDebug("Executing timer.");
+                Plugin.Log(LogSystem.RandomEncounter, LogLevel.Debug, "Executing timer.");
                 _action.Invoke(world);
             }
             catch (Exception ex)
             {
-                Plugin.Logger.LogError(ex);
+                Plugin.Log(LogSystem.Core, LogLevel.Error, $"Timer failed {ex}");
             }
             finally
             {

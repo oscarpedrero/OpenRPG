@@ -17,9 +17,10 @@
 
 The RPG mod was initially developed by [Kaltharos](https://github.com/Kaltharos).
 
-The Random Encounters mod was originally developed by [adainrivers](https://github.com/adainrivers/randomencounters).
+Other contributors:
+`Dimentox#1154` (Discord), `Nopey#1337` (Discord), `syllabicat#0692` (Discord), `errox#7604` (Discord), Jason Williams (`SALTYFLEA#3772`), [Trodi](https://github.com/oscarpedrero), [Dresmyr](https://github.com/Darkon47), [aontas](https://github.com/aontas)
 
-Updated by [Trodi](https://github.com/oscarpedrero).
+The Random Encounters mod was originally developed by [adainrivers](https://github.com/adainrivers/randomencounters).
 
 [V Rising Mod Community](https://discord.gg/vrisingmods) - the premier community for V Rising mods.
 

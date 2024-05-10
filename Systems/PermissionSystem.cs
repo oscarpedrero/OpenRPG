@@ -1,11 +1,11 @@
-﻿using ProjectM;
+﻿using System;
+using ProjectM;
 using ProjectM.Network;
 using OpenRPG.Utils;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
-using System.Text.Json;
-using System.Threading.Tasks;
+using OpenRPG.Models;
+using OpenRPG.Utils.Prefabs;
 using Unity.Entities;
 using VampireCommandFramework;
 
@@ -13,53 +13,19 @@ namespace OpenRPG.Systems
 {
     public static class PermissionSystem
     {
-        public static bool isVIPSystem = true;
-        public static bool isVIPWhitelist = true;
-        public static int VIP_Permission = 10;
-
-        public static double VIP_OutCombat_ResYield = -1.0;
-        public static double VIP_OutCombat_DurabilityLoss = -1.0;
-        public static double VIP_OutCombat_MoveSpeed = -1.0;
-        public static double VIP_OutCombat_GarlicResistance = -1.0;
-        public static double VIP_OutCombat_SilverResistance = -1.0;
-
-        public static double VIP_InCombat_ResYield = -1.0;
-        public static double VIP_InCombat_DurabilityLoss = -1.0;
-        public static double VIP_InCombat_MoveSpeed = -1.0;
-        public static double VIP_InCombat_GarlicResistance = -1.0;
-        public static double VIP_InCombat_SilverResistance = -1.0;
-
         private static EntityManager em = Plugin.Server.EntityManager;
 
-        public static bool IsUserVIP(ulong steamID)
-        {
-            bool isVIP = GetUserPermission(steamID) >= VIP_Permission;
-            return isVIP;
-        }
+        public static int HighestPrivilege = 100;
+        public static int LowestPrivilege = 0;
 
         public static int GetUserPermission(ulong steamID)
         {
-            bool isExist = Database.user_permission.TryGetValue(steamID, out var permission);
-            if (isExist) return permission;
-            return 0;
+            return Database.UserPermission.GetValueOrDefault(steamID, LowestPrivilege);
         }
 
         public static int GetCommandPermission(string command)
         {
-            var isExist = Database.command_permission.TryGetValue(command, out int requirement);
-            if (isExist) return requirement;
-            else
-            {
-                Database.command_permission[command] = 100;
-                SavePermissions();
-            }
-            return 100;
-        }
-
-        public static bool PermissionCheck(ulong steamID, string command)
-        {
-            bool isAllowed = GetUserPermission(steamID) >= GetCommandPermission(command);
-            return isAllowed;
+            return Database.CommandPermission.GetValueOrDefault(command, HighestPrivilege);
         }
 
         private static object SendPermissionList(ChatCommandContext ctx, List<string> messages)
@@ -71,240 +37,107 @@ namespace OpenRPG.Systems
             return new object();
         }
 
-        public static async Task PermissionList(ChatCommandContext ctx)
+        public static void UserPermissionList(ChatCommandContext ctx)
         {
-            await Task.Yield();
-
-            List<string> messages = new List<string>();
-
-            var SortedPermission = Database.user_permission.ToList();
-            SortedPermission.Sort((pair1, pair2) => pair2.Value.CompareTo(pair1.Value));
-            var ListPermission = SortedPermission;
-            messages.Add($"===================================");
-            if (ListPermission.Count == 0) messages.Add($"<color=#fffffffe>No Result</color>");
+            var sortedPermission = Database.UserPermission.ToList();
+            // Sort by privilege descending
+            sortedPermission.Sort((pair1, pair2) => pair2.Value.CompareTo(pair1.Value));
+            ctx.Reply($"===================================");
+            if (sortedPermission.Count == 0) ctx.Reply($"<color=#ffffff>No permissions</color>");
             else
             {
-                int i = 0;
-                foreach (var result in ListPermission)
+                foreach (var (item, index) in sortedPermission.Select((item, index) => (item, index)))
                 {
-                    i++;
-                    messages.Add($"{i}. <color=#fffffffe>{Helper.GetNameFromSteamID(result.Key)} : {result.Value}</color>");
+                    ctx.Reply($"{index}. <color=#ffffff>{Helper.GetNameFromSteamID(item.Key)} : {item.Value}</color>");
                 }
             }
-            messages.Add($"===================================");
-
-            TaskRunner.Start(taskWorld => SendPermissionList(ctx, messages), false);
+            ctx.Reply($"===================================");
         }
-
-        public static void BuffReceiver(Entity buffEntity, PrefabGUID GUID)
+        
+        public static void CommandPermissionList(ChatCommandContext ctx)
         {
-            if (!GUID.Equals(Database.Buff.OutofCombat) && !em.HasComponent<InCombatBuff>(buffEntity)) return;
-            var Owner = em.GetComponentData<EntityOwner>(buffEntity).Owner;
-            if (!em.HasComponent<PlayerCharacter>(Owner)) return;
-
-            var userEntity = em.GetComponentData<PlayerCharacter>(Owner).UserEntity;
-            var SteamID = em.GetComponentData<User>(userEntity).PlatformId;
-
-            if (IsUserVIP(SteamID))
+            var sortedPermission = Database.CommandPermission.ToList();
+            // Sort by command name
+            sortedPermission.Sort((pair1, pair2) => String.Compare(pair1.Key, pair2.Key, StringComparison.CurrentCultureIgnoreCase));
+            ctx.Reply($"===================================");
+            if (sortedPermission.Count == 0) ctx.Reply($"<color=#ffffff>No commands</color>");
+            else
             {
-                var Buffer = em.AddBuffer<ModifyUnitStatBuff_DOTS>(buffEntity);
-                //-- Out of Combat Buff
-                if (GUID.Equals(Database.Buff.OutofCombat))
+                foreach (var (item, index) in sortedPermission.Select((item, index) => (item, index)))
                 {
-                    if (VIP_OutCombat_ResYield > 0)
-                    {
-                        Buffer.Add(new ModifyUnitStatBuff_DOTS()
-                        {
-                            StatType = UnitStatType.ResourceYield,
-                            Value = (float)VIP_OutCombat_ResYield,
-                            ModificationType = ModificationType.Multiply,
-                            Id = ModificationId.NewId(0)
-                        });
-                    }
-                    if (VIP_OutCombat_DurabilityLoss > 0)
-                    {
-                        Buffer.Add(new ModifyUnitStatBuff_DOTS()
-                        {
-                            StatType = UnitStatType.ReducedResourceDurabilityLoss,
-                            Value = (float)VIP_OutCombat_DurabilityLoss,
-                            ModificationType = ModificationType.Multiply,
-                            Id = ModificationId.NewId(0)
-                        });
-                    }
-                    if (VIP_OutCombat_MoveSpeed > 0)
-                    {
-                        Buffer.Add(new ModifyUnitStatBuff_DOTS()
-                        {
-                            StatType = UnitStatType.MovementSpeed,
-                            Value = (float)VIP_OutCombat_MoveSpeed,
-                            ModificationType = ModificationType.Multiply,
-                            Id = ModificationId.NewId(0)
-                        });
-                    }
-                    if (VIP_OutCombat_GarlicResistance > 0)
-                    {
-                        Buffer.Add(new ModifyUnitStatBuff_DOTS()
-                        {
-                            StatType = UnitStatType.GarlicResistance,
-                            Value = (float)VIP_OutCombat_GarlicResistance,
-                            ModificationType = ModificationType.Multiply,
-                            Id = ModificationId.NewId(0)
-                        });
-                    }
-                    if (VIP_OutCombat_SilverResistance > 0)
-                    {
-                        Buffer.Add(new ModifyUnitStatBuff_DOTS()
-                        {
-                            StatType = UnitStatType.SilverResistance,
-                            Value = (float)VIP_OutCombat_SilverResistance,
-                            ModificationType = ModificationType.Multiply,
-                            Id = ModificationId.NewId(0)
-                        });
-                    }
-                }
-                //-- In Combat Buff
-                else if (em.HasComponent<InCombatBuff>(buffEntity))
-                {
-                    if (VIP_InCombat_ResYield > 0)
-                    {
-                        Buffer.Add(new ModifyUnitStatBuff_DOTS()
-                        {
-                            StatType = UnitStatType.ResourceYield,
-                            Value = (float)VIP_InCombat_ResYield,
-                            ModificationType = ModificationType.Multiply,
-                            Id = ModificationId.NewId(0)
-                        });
-                    }
-                    if (VIP_InCombat_DurabilityLoss > 0)
-                    {
-                        Buffer.Add(new ModifyUnitStatBuff_DOTS()
-                        {
-                            StatType = UnitStatType.ReducedResourceDurabilityLoss,
-                            Value = (float)VIP_InCombat_DurabilityLoss,
-                            ModificationType = ModificationType.Multiply,
-                            Id = ModificationId.NewId(0)
-                        });
-                    }
-                    if (VIP_InCombat_MoveSpeed > 0)
-                    {
-                        Buffer.Add(new ModifyUnitStatBuff_DOTS()
-                        {
-                            StatType = UnitStatType.MovementSpeed,
-                            Value = (float)VIP_InCombat_MoveSpeed,
-                            ModificationType = ModificationType.Multiply,
-                            Id = ModificationId.NewId(0)
-                        });
-                    }
-                    if (VIP_InCombat_GarlicResistance > 0)
-                    {
-                        Buffer.Add(new ModifyUnitStatBuff_DOTS()
-                        {
-                            StatType = UnitStatType.GarlicResistance,
-                            Value = (float)VIP_InCombat_GarlicResistance,
-                            ModificationType = ModificationType.Multiply,
-                            Id = ModificationId.NewId(0)
-                        });
-                    }
-                    if (VIP_InCombat_SilverResistance > 0)
-                    {
-                        Buffer.Add(new ModifyUnitStatBuff_DOTS()
-                        {
-                            StatType = UnitStatType.SilverResistance,
-                            Value = (float)VIP_InCombat_SilverResistance,
-                            ModificationType = ModificationType.Multiply,
-                            Id = ModificationId.NewId(0)
-                        });
-                    }
+                    ctx.Reply($"{index}. <color=#ffffff>{item.Key} : {item.Value}</color>");
                 }
             }
+            ctx.Reply($"===================================");
         }
 
-        public static void SavePermissions()
+        public static LazyDictionary<string, int> DefaultCommandPermissions()
         {
-            File.WriteAllText("BepInEx/config/OpenRPG/command_permission.json", JsonSerializer.Serialize(Database.command_permission, Database.Pretty_JSON_options));
-        }
-
-        public static void SaveUserPermission()
-        {
-            File.WriteAllText("BepInEx/config/OpenRPG/user_permission.json", JsonSerializer.Serialize(Database.user_permission, Database.Pretty_JSON_options));
-        }
-
-        public static void LoadPermissions()
-        {
-            if (!File.Exists("BepInEx/config/OpenRPG/user_permission.json"))
+            var permissions = new LazyDictionary<string, int>()
             {
-                FileStream stream = File.Create("BepInEx/config/OpenRPG/user_permission.json");
-                stream.Dispose();
-            }
-            string json = File.ReadAllText("BepInEx/config/OpenRPG/user_permission.json");
-            try
-            {
-                Database.user_permission = JsonSerializer.Deserialize<Dictionary<ulong, int>>(json);
-                Plugin.Logger.LogWarning("UserPermissions DB Populated");
-            }
-            catch
-            {
-                Database.user_permission = new Dictionary<ulong, int>();
-                Plugin.Logger.LogWarning("UserPermission DB Created.");
-            }
-
-            if (!File.Exists("BepInEx/config/OpenRPG/command_permission.json"))
-            {
-                FileStream stream = File.Create("BepInEx/config/OpenRPG/command_permission.json");
-                stream.Dispose();
-            }
-            json = File.ReadAllText("BepInEx/config/OpenRPG/command_permission.json");
-            try
-            {
-                Database.command_permission = JsonSerializer.Deserialize<Dictionary<string, int>>(json);
-                Plugin.Logger.LogWarning("CommandPermissions DB Populated");
-            }
-            catch
-            {
-                Database.command_permission = new Dictionary<string, int>();
-                Database.command_permission["help"] = 0;
-                Database.command_permission["ping"] = 0;
-                Database.command_permission["myinfo"] = 0;
-                Database.command_permission["pvp"] = 0;
-                Database.command_permission["pvp_args"] = 100;
-                Database.command_permission["siege"] = 0;
-                Database.command_permission["siege_args"] = 100;
-                Database.command_permission["heat"] = 0;
-                Database.command_permission["heat_args"] = 100;
-                Database.command_permission["experience"] = 0;
-                Database.command_permission["experience_args"] = 100;
-                Database.command_permission["mastery"] = 0;
-                Database.command_permission["mastery_args"] = 100;
-                Database.command_permission["autorespawn"] = 100;
-                Database.command_permission["autorespawn_args"] = 100;
-                Database.command_permission["waypoint"] = 100;
-                Database.command_permission["waypoint_args"] = 100;
-                Database.command_permission["ban"] = 100;
-                Database.command_permission["bloodpotion"] = 100;
-                Database.command_permission["blood"] = 100;
-                Database.command_permission["customspawn"] = 100;
-                Database.command_permission["give"] = 100;
-                Database.command_permission["godmode"] = 100;
-                Database.command_permission["health"] = 100;
-                Database.command_permission["kick"] = 100;
-                Database.command_permission["kit"] = 100;
-                Database.command_permission["nocooldown"] = 100;
-                Database.command_permission["permission"] = 100;
-                Database.command_permission["playerinfo"] = 100;
-                Database.command_permission["punish"] = 100;
-                Database.command_permission["rename"] = 100;
-                Database.command_permission["adminrename"] = 100;
-                Database.command_permission["resetcooldown"] = 100;
-                Database.command_permission["save"] = 100;
-                Database.command_permission["shutdown"] = 100;
-                Database.command_permission["spawnnpc"] = 100;
-                Database.command_permission["speed"] = 100;
-                Database.command_permission["sunimmunity"] = 100;
-                Database.command_permission["teleport"] = 100;
-                Database.command_permission["worlddynamics"] = 100;
-                SavePermissions();
-                Plugin.Logger.LogWarning("CommandPermissions DB Created.");
-            }
+                {"ban info", 0},
+                {"ban player", 100},
+                {"ban unban", 100},
+                {"bloodline add", 100},
+                {"bloodline get", 0},
+                {"bloodline get-all", 0},
+                {"bloodline log", 0},
+                {"bloodline reset", 0},
+                {"bloodline set", 100},
+                {"experience ability", 0},
+                {"experience ability reset", 50},
+                {"experience ability show", 0},
+                {"experience get", 0},
+                {"experience log", 0},
+                {"experience set", 100},
+                {"godmode", 100},
+                {"kick", 100},
+                {"kit", 100},
+                {"load", 100},
+                {"mastery add", 100},
+                {"mastery get", 0},
+                {"mastery get-all", 0},
+                {"mastery log", 0},
+                {"mastery reset", 0},
+                {"mastery set", 100},
+                {"nocooldown", 100},
+                {"permission", 100},
+                {"permission set command", 100},
+                {"permission set user", 100},
+                {"playerinfo", 0},
+                {"powerdown", 100},
+                {"powerup", 100},
+                {"re disable", 100},
+                {"re enable", 100},
+                {"re me", 100},
+                {"re player", 100},
+                {"re start", 100},
+                {"save", 100},
+                {"speed", 100},
+                {"sunimmunity", 100},
+                {"unlock achievements", 100},
+                {"unlock research", 100},
+                {"unlock vbloodability", 100},
+                {"unlock vbloodpassive", 100},
+                {"unlock vbloodshapeshift", 100},
+                {"wanted fixminions", 100},
+                {"wanted get", 0},
+                {"wanted log", 0},
+                {"wanted set", 100},
+                {"wanted trigger", 100},
+                {"waypoint go", 100},
+                {"waypoint list", 0},
+                {"waypoint remove", 100},
+                {"waypoint remove global", 100},
+                {"waypoint set", 100},
+                {"waypoint set global", 100},
+                {"worlddynamics ignore", 100},
+                {"worlddynamics info", 0},
+                {"worlddynamics load", 100},
+                {"worlddynamics save", 100},
+                {"worlddynamics unignore", 100}
+            };
+            return permissions;
         }
     }
 }

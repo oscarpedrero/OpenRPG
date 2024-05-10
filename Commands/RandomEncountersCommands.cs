@@ -3,7 +3,7 @@ using OpenRPG.Systems;
 using VampireCommandFramework;
 using VRising.GameData;
 
-namespace OpenRPG.Command
+namespace OpenRPG.Commands
 {
     [CommandGroup("re")]
     internal class RandomEncountersCommands
@@ -25,7 +25,7 @@ namespace OpenRPG.Command
             return;
         }
 
-        [Command("player", usage: "<PlayerName>", description: "Starts an encounter for the given player, for example.", adminOnly: true)]
+        [Command("player", usage: "<PlayerName>", description: "Starts an encounter for the given player.", adminOnly: true)]
         public static void PlayerCommand(ChatCommandContext ctx, string PlayerName)
         {
             var senderModel = GameData.Users.GetUserByCharacterName(PlayerName);
@@ -41,32 +41,14 @@ namespace OpenRPG.Command
             ctx.Reply($"Sending an ambush to {PlayerName}.");
         }
 
-        /*[Command("reload", usage: "", description: "Reloads the configuration without restarting the server.", adminOnly: true)]
-        public static void ReloadCommand(ChatCommandContext ctx)
-        {
-            var currentStatus = PluginConfig.Enabled.Value;
-            PluginConfig.Initialize();
-            if (!currentStatus && PluginConfig.Enabled.Value)
-            {
-                Plugin.StartEncounterTimer();
-            }
-
-            if (!PluginConfig.Enabled.Value)
-            {
-                Plugin._encounterTimer.Stop();
-            }
-
-            ctx.Reply($"Reloaded configuration");
-        }*/
-
         [Command("enable", usage: "", description: "Enables the random encounter timer.", adminOnly: true)]
         public static void EnableCommand(ChatCommandContext ctx)
         {
-            if (RandomEncountersConfig.Enabled.Value)
+            if (Plugin.RandomEncountersSystemActive)
             {
                 throw ctx.Error("Already enabled.");
             }
-            RandomEncountersConfig.Enabled.Value = true;
+            Plugin.RandomEncountersSystemActive = true;
             RandomEncounters.StartEncounterTimer();
             ctx.Reply($"Enabled");
         }
@@ -74,12 +56,12 @@ namespace OpenRPG.Command
         [Command("disable", usage: "", description: "Disables the random encounter timer.", adminOnly: true)]
         public static void DisableCommand(ChatCommandContext ctx)
         {
-            if (!RandomEncountersConfig.Enabled.Value)
+            if (!Plugin.RandomEncountersSystemActive)
             {
                 throw ctx.Error("Already disabled.");
             }
-            RandomEncountersConfig.Enabled.Value = false;
-            RandomEncounters._encounterTimer.Stop();
+            Plugin.RandomEncountersSystemActive = false;
+            RandomEncounters.EncounterTimer.Stop();
             ctx.Reply("Disabled.");
         }
     }

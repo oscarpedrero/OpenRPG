@@ -1,23 +1,20 @@
-﻿using BepInEx;
-using BepInEx.Unity.IL2CPP;
-using BepInEx.Configuration;
+using System;
+using BepInEx;
 using VampireCommandFramework;
 using BepInEx.Logging;
+using BepInEx.Unity.IL2CPP;
 using HarmonyLib;
 using OpenRPG.Commands;
-using OpenRPG.Hooks;
-using OpenRPG.Systems;
 using OpenRPG.Utils;
-using System.IO;
 using System.Reflection;
 using Unity.Entities;
 using UnityEngine;
-using Bloodstone.API;
 using VRising.GameData;
-using Lidgren.Network;
-using Unity.Collections;
 using OpenRPG.Configuration;
 using OpenRPG.Components.RandomEncounters;
+using OpenRPG.Systems;
+using OpenRPG.Utils.Prefabs;
+using ProjectM;
 
 namespace OpenRPG
 {
@@ -30,102 +27,19 @@ namespace OpenRPG
 
         internal static Plugin Instance { get; private set; }
 
-        public static readonly string ConfigPath = Path.Combine(Paths.ConfigPath, "OpenRPG");
-        public static readonly string SavesPath = Path.Combine(Plugin.ConfigPath, "Saves");
-        public static readonly string AutorespawnJson = Path.Combine(SavesPath, "autorespawn.json");
-        public static readonly string GodModeJson = Path.Combine(SavesPath, "godmode.json");
-        public static readonly string KitsJson = Path.Combine(SavesPath, "kits.json");
-        public static readonly string NoCooldownJson = Path.Combine(SavesPath, "nocooldown.json");
-        public static readonly string PowerUpJson = Path.Combine(SavesPath, "powerup.json");
-        public static readonly string SpeedingJson = Path.Combine(SavesPath, "speeding.json");
-        public static readonly string SunImmunityJson = Path.Combine(SavesPath, "sunimmunity.json");
-        public static readonly string WaypointsJson = Path.Combine(SavesPath, "waypoints.json");
-        public static readonly string GlobalWaypointsJson = Path.Combine(SavesPath, "global_waypoints.json");
-        public static readonly string TotalWaypointsJson = Path.Combine(SavesPath, "total_waypoints.json");
-        public static readonly string KitsRootJson = Path.Combine(ConfigPath, "kits.json");
-
-        public static bool initServer = false;
-
-        private static ConfigEntry<string> Prefix;
-        private static ConfigEntry<string> DisabledCommands;
-        private static ConfigEntry<float> DelayedCommands;
-        private static ConfigEntry<int> WaypointLimit;
-
-        private static ConfigEntry<bool> EnableVIPSystem;
-        private static ConfigEntry<bool> EnableVIPWhitelist;
-        private static ConfigEntry<int> VIP_Permission;
-
-        private static ConfigEntry<double> VIP_InCombat_ResYield;
-        private static ConfigEntry<double> VIP_InCombat_DurabilityLoss;
-        private static ConfigEntry<double> VIP_InCombat_MoveSpeed;
-        private static ConfigEntry<double> VIP_InCombat_GarlicResistance;
-        private static ConfigEntry<double> VIP_InCombat_SilverResistance;
-
-        private static ConfigEntry<double> VIP_OutCombat_ResYield;
-        private static ConfigEntry<double> VIP_OutCombat_DurabilityLoss;
-        private static ConfigEntry<double> VIP_OutCombat_MoveSpeed;
-        private static ConfigEntry<double> VIP_OutCombat_GarlicResistance;
-        private static ConfigEntry<double> VIP_OutCombat_SilverResistance;
-
-        private static ConfigEntry<bool> AnnouncePvPKills;
-        private static ConfigEntry<bool> EnablePvPToggle;
-
-        private static ConfigEntry<bool> EnablePvPLadder;
-        private static ConfigEntry<int> PvPLadderLength;
-        private static ConfigEntry<bool> HonorSortLadder;
+        public static bool IsInitialized = false;
+        public static bool BloodlineSystemActive = false;
+        public static bool ExperienceSystemActive = true;
+        public static bool PlayerGroupsActive = true;
+        public static bool PowerUpCommandsActive = false;
+        public static bool RandomEncountersSystemActive = false;
+        public static bool WeaponMasterySystemActive = false;
+        public static bool WantedSystemActive = true;
+        public static bool WaypointsActive = false;
         
-        private static ConfigEntry<bool> EnablePvPPunish;
-        private static ConfigEntry<bool> EnablePvPPunishAnnounce;
-        private static ConfigEntry<bool> ExcludeOfflineKills;
-        private static ConfigEntry<int> PunishLevelDiff;
-        private static ConfigEntry<float> PunishDuration;
-        private static ConfigEntry<int> PunishOffenseLimit;
-        private static ConfigEntry<float> PunishOffenseCooldown;
+        private static bool _disableCommandAdminRequirement = false;
 
-        private static ConfigEntry<bool> EnableHonorSystem;
-        private static ConfigEntry<bool> EnableHonorTitle;
-        private static ConfigEntry<int> MaxHonorGainPerSpan;
-        private static ConfigEntry<bool> EnableHonorBenefit;
-        private static ConfigEntry<int> HonorSiegeDuration;
-        private static ConfigEntry<bool> EnableHostileGlow;
-        private static ConfigEntry<bool> UseProximityGlow;
-
-        private static ConfigEntry<bool> BuffSiegeGolem;
-        private static ConfigEntry<float> GolemPhysicalReduction;
-        private static ConfigEntry<float> GolemSpellReduction;
-
-        private static ConfigEntry<bool> HunterHuntedEnabled;
-        private static ConfigEntry<int> HeatCooldown;
-        private static ConfigEntry<int> BanditHeatCooldown;
-        private static ConfigEntry<int> CoolDown_Interval;
-        private static ConfigEntry<int> Ambush_Interval;
-        private static ConfigEntry<int> Ambush_Chance;
-        private static ConfigEntry<float> Ambush_Despawn_Unit_Timer;
-
-        private static ConfigEntry<bool> EnableExperienceSystem;
-        private static ConfigEntry<int> MaxLevel;
-        private static ConfigEntry<float> EXPMultiplier;
-        private static ConfigEntry<float> VBloodEXPMultiplier;
-        private static ConfigEntry<double> EXPLostOnDeath;
-        private static ConfigEntry<float> EXPFormula_1;
-        private static ConfigEntry<double> EXPGroupModifier;
-        private static ConfigEntry<float> EXPGroupMaxDistance;
-
-        private static ConfigEntry<bool> EnableWeaponMaster;
-        private static ConfigEntry<bool> EnableWeaponMasterDecay;
-        private static ConfigEntry<float> WeaponMasterMultiplier;
-        private static ConfigEntry<int> WeaponDecayInterval;
-        private static ConfigEntry<int> WeaponMaxMastery;
-        private static ConfigEntry<float> WeaponMastery_VBloodMultiplier;
-        private static ConfigEntry<int> Offline_Weapon_MasteryDecayValue;
-        private static ConfigEntry<int> MasteryCombatTick;
-        private static ConfigEntry<int> MasteryMaxCombatTicks;
-
-        private static ConfigEntry<bool> EnableWorldDynamics;
-
-        public static bool isInitialized = false;
-
-        public static ManualLogSource Logger;
+        private static ManualLogSource _logger;
         private static World _serverWorld;
         public static World Server
         {
@@ -154,246 +68,168 @@ namespace OpenRPG
             return null;
         }
 
-        public void InitConfig()
+        public void InitCoreConfig()
         {
-            Prefix = Config.Bind("Config", "Prefix", ".", "The prefix used for chat commands.");
-            DelayedCommands = Config.Bind("Config", "Command Delay", 5f, "The number of seconds user need to wait out before sending another command.\n" +
-                "Admin will always bypass this.");
-            DisabledCommands = Config.Bind("Config", "Disabled Commands", "", "Enter command names to disable them, abbreviation are included automatically. Seperated by commas.\n" +
-                "Ex.: save,godmode");
-            WaypointLimit = Config.Bind("Config", "Waypoint Limit", 3, "Set a waypoint limit per user.");
+            Helper.buffGUID = Config.Bind("Core", "Buff GUID", (int)SetBonus.SetBonus_Damage_Minor_Buff_01, "The GUID of the buff that gets used when mastery, bloodline, etc changes.\nDefault is now boneguard set bonus 2, but you can set anything else too.\nThe only reason to change this is if it clashes with another mod.").Value;
+            Helper.AppliedBuff = new PrefabGUID(Helper.buffGUID);
+            Helper.forbiddenBuffGUID = Config.Bind("Core", "Forbidden Buff GUID", Helper.forbiddenBuffGUID, "The GUID of the buff that prohibits you from getting mastery buffs\nDefault is boneguard set bonus 1. If this is the same value as Buff GUID, then none will get buffs.\nThe only reason to change this is if it clashes with another mod.").Value;
+            Helper.humanReadablePercentageStats = Config.Bind("Core", "Human Readable Percentage Stats", true, "Determines if rates for percentage stats should be read as out of 100 instead of 1.").Value;
+            Helper.inverseMultipersDisplayReduction = Config.Bind("Core", "Inverse Multipliers Display Reduction", true, "Determines if inverse multiplier stats display their reduction, or the final value.").Value;
+            
+            _disableCommandAdminRequirement = Config.Bind("Admin", "Disable command admin requirement", false, "Disables all admin checks when running commands.").Value;
 
-            EnableVIPSystem = Config.Bind("VIP", "Enable VIP System", false, "Enable the VIP System.");
-            EnableVIPWhitelist = Config.Bind("VIP", "Enable VIP Whitelist", false, "Enable the VIP user to ignore server capacity limit.");
-            VIP_Permission = Config.Bind("VIP", "Minimum VIP Permission", 10, "The minimum permission level required for the user to be considered as VIP.");
+            BloodlineSystemActive = Config.Bind("System", "Enable Bloodline Mastery system", false,  "Enable/disable the bloodline mastery system.").Value;
+            ExperienceSystemActive = Config.Bind("System", "Enable Experience system", true,  "Enable/disable the experience system.").Value;
+            PlayerGroupsActive = Config.Bind("System", "Enable Player Groups", true,  "Enable/disable the player group system.").Value;
+            // Disabling this for now as it needs more attention.
+            //RandomEncountersSystemActive = Config.Bind("System", "Enable Random Encounters system", false,  "Enable/disable the random encounters system.").Value;
+            WeaponMasterySystemActive = Config.Bind("System", "Enable Weapon Mastery system", false,  "Enable/disable the weapon mastery system.").Value;
+            WantedSystemActive = Config.Bind("System", "Enable Wanted system", false,  "Enable/disable the wanted system.").Value;
+            
+            // I only want to keep waypoints around as it makes it easier to test.
+            //WaypointsActive = Config.Bind("Core", "Enable Wanted system", false,  "Enable/disable waypoints.").Value;
 
-            VIP_InCombat_DurabilityLoss = Config.Bind("VIP.InCombat", "Durability Loss Multiplier", 0.5, "Multiply durability loss when user is in combat. -1.0 to disable.\n" +
-                "Does not affect durability loss on death.");
-            VIP_InCombat_GarlicResistance = Config.Bind("VIP.InCombat", "Garlic Resistance Multiplier", -1.0, "Multiply garlic resistance when user is in combat. -1.0 to disable.");
-            VIP_InCombat_SilverResistance = Config.Bind("VIP.InCombat", "Silver Resistance Multiplier", -1.0, "Multiply silver resistance when user is in combat. -1.0 to disable.");
-            VIP_InCombat_MoveSpeed = Config.Bind("VIP.InCombat", "Move Speed Multiplier", -1.0, "Multiply move speed when user is in combat. -1.0 to disable.");
-            VIP_InCombat_ResYield = Config.Bind("VIP.InCombat", "Resource Yield Multiplier", 2.0, "Multiply resource yield (not item drop) when user is in combat. -1.0 to disable.");
-
-            VIP_OutCombat_DurabilityLoss = Config.Bind("VIP.OutCombat", "Durability Loss Multiplier", 0.5, "Multiply durability loss when user is out of combat. -1.0 to disable.\n" +
-                "Does not affect durability loss on death.");
-            VIP_OutCombat_GarlicResistance = Config.Bind("VIP.OutCombat", "Garlic Resistance Multiplier", 2.0, "Multiply garlic resistance when user is out of combat. -1.0 to disable.");
-            VIP_OutCombat_SilverResistance = Config.Bind("VIP.OutCombat", "Silver Resistance Multiplier", 2.0, "Multiply silver resistance when user is out of combat. -1.0 to disable.");
-            VIP_OutCombat_MoveSpeed = Config.Bind("VIP.OutCombat", "Move Speed Multiplier", 1.25, "Multiply move speed when user is out of combat. -1.0 to disable.");
-            VIP_OutCombat_ResYield = Config.Bind("VIP.OutCombat", "Resource Yield Multiplier", 2.0, "Multiply resource yield (not item drop) when user is out of combat. -1.0 to disable.");
-
-            AnnouncePvPKills = Config.Bind("PvP", "Announce PvP Kills", true, "Make a server wide announcement for all PvP kills.");
-            EnableHonorSystem = Config.Bind("PvP", "Enable Honor System", false, "Enable the honor system.");
-            EnableHonorTitle = Config.Bind("PvP", "Enable Honor Title", true, "When enabled, the system will append the title to their name.\nHonor system will leave the player name untouched if disabled.");
-            MaxHonorGainPerSpan = Config.Bind("PvP", "Max Honor Gain/Hour", 250, "Maximum amount of honor points the player can gain per hour.");
-            EnableHonorBenefit = Config.Bind("PvP", "Enable Honor Benefit & Penalties", true, "If disabled, the hostility state and custom siege system will be disabled.\n" +
-                "All other bonus is also not applied.");
-            HonorSiegeDuration = Config.Bind("PvP", "Custom Siege Duration", 180, "In minutes. Player will automatically exit siege mode after this many minutes has passed.\n" +
-                "Siege mode cannot be exited while duration has not passed.");
-            EnableHostileGlow = Config.Bind("PvP", "Enable Hostile Glow", true, "When set to true, hostile players will glow red.");
-            UseProximityGlow = Config.Bind("PvP", "Enable Proximity Hostile Glow", true, "If enabled, hostile players will only glow when they are close to other online player.\n" +
-                "If disabled, hostile players will always glow red.");
-            EnablePvPLadder = Config.Bind("PvP", "Enable PvP Ladder", true, "Enables the PvP Ladder in the PvP command.");
-            PvPLadderLength = Config.Bind("PvP", "Ladder Length", 10, "How many players should be displayed in the PvP Ladders.");
-            HonorSortLadder = Config.Bind("PvP", "Sort PvP Ladder by Honor", true, "This will automatically be false if honor system is not enabled.");
-            EnablePvPToggle = Config.Bind("PvP", "Enable PvP Toggle", false, "Enable/disable the pvp toggle feature in the pvp command.");
-
-            EnablePvPPunish = Config.Bind("PvP", "Enable PvP Punishment", false, "Enables the punishment system for killing lower level player.");
-            EnablePvPPunishAnnounce = Config.Bind("PvP", "Enable PvP Punish Announcement", true, "Announce all grief-kills that occured.");
-            ExcludeOfflineKills = Config.Bind("PvP", "Exclude Offline Grief", true, "Do not punish the killer if the victim is offline.");
-            PunishLevelDiff = Config.Bind("PvP", "Punish Level Difference", -10, "Only punish the killer if the victim level is this much lower.");
-            PunishOffenseLimit = Config.Bind("PvP", "Offense Limit", 3, "Killer must make this many offense before the punishment debuff is applied.");
-            PunishOffenseCooldown = Config.Bind("PvP", "Offense Cooldown", 300f, "Reset the offense counter after this many seconds has passed since last offense.");
-            PunishDuration = Config.Bind("PvP", "Debuff Duration", 1800f, "Apply the punishment debuff for this amount of time.");
-
-            BuffSiegeGolem = Config.Bind("Siege", "Buff Siege Golem", false, "Enabling this will reduce all incoming physical and spell damage according to config.");
-            GolemPhysicalReduction = Config.Bind("Siege", "Physical Damage Reduction", 0.5f, "Reduce incoming damage by this much. Ex.: 0.25 -> 25%");
-            GolemSpellReduction = Config.Bind("Siege", "Spell Damage Reduction", 0.5f, "Reduce incoming spell damage by this much. Ex.: 0.75 -> 75%");
-
-            HunterHuntedEnabled = Config.Bind("HunterHunted", "Enable", true, "Enable/disable the HunterHunted system.");
-            HeatCooldown = Config.Bind("HunterHunted", "Heat Cooldown", 25, "Set the reduction value for player heat for every cooldown interval.");
-            BanditHeatCooldown = Config.Bind("HunterHunted", "Bandit Heat Cooldown", 5, "Set the reduction value for player heat from the bandits faction for every cooldown interval.");
-            CoolDown_Interval = Config.Bind("HunterHunted", "Cooldown Interval", 60, "Set every how many seconds should the cooldown interval trigger.");
-            Ambush_Interval = Config.Bind("HunterHunted", "Ambush Interval", 300, "Set how many seconds player can be ambushed again since last ambush.");
-            Ambush_Chance = Config.Bind("HunterHunted", "Ambush Chance", 50, "Set the percentage that an ambush may occur for every cooldown interval.");
-            Ambush_Despawn_Unit_Timer = Config.Bind("HunterHunted", "Ambush Despawn Timer", 300f, "Despawn the ambush squad after this many second if they are still alive.\n" +
-                "Must be higher than 1.");
-
-
-            EnableExperienceSystem = Config.Bind("Experience", "Enable", true, "Enable/disable the the Experience System.");
-            MaxLevel = Config.Bind("Experience", "Max Level", 80, "Configure the experience system max level.");
-            EXPMultiplier = Config.Bind("Experience", "Multiplier", 1.0f, "Multiply the EXP gained by player.\n" +
-                "Ex.: 0.7f -> Will reduce the EXP gained by 30%\nFormula: UnitKilledLevel * EXPMultiplier");
-            VBloodEXPMultiplier = Config.Bind("Experience", "VBlood Multiplier", 15f, "Multiply EXP gained from VBlood kill.\n" +
-                "Formula: EXPGained * VBloodMultiplier * EXPMultiplier");
-            EXPLostOnDeath = Config.Bind("Experience", "EXP Lost / Death", 0.10, "Percentage of experience the player lost for every death by NPC, no EXP is lost for PvP.\nFormula: TotalPlayerEXP - (EXPNeeded * EXPLost)");
-            EXPFormula_1 = Config.Bind("Experience", "Constant", 0.2f, "Increase or decrease the required EXP to level up.\n" +
-                "Formula: (level/constant)^2\n" +
-                "EXP Table & Formula: https://bit.ly/3npqdJw");
-            EXPGroupModifier = Config.Bind("Experience", "Group Modifier", 0.75, "Set the modifier for EXP gained for each ally(player) in vicinity.\n" +
-                "Example if you have 2 ally nearby, EXPGained = ((EXPGained * Modifier)*Modifier)");
-            EXPGroupMaxDistance = Config.Bind("Experience", "Ally Max Distance", 50f, "Set the maximum distance an ally(player) has to be from the player for them to share EXP with the player");
-
-            EnableWeaponMaster = Config.Bind("Mastery", "Enable Weapon Mastery", true, "Enable/disable the weapon mastery system.");
-            EnableWeaponMasterDecay = Config.Bind("Mastery", "Enable Mastery Decay", true, "Enable/disable the decay of weapon mastery when the user is offline.");
-            WeaponMaxMastery = Config.Bind("Mastery", "Max Mastery Value", 100000, "Configure the maximum mastery the user can atain. (100000 is 100%)");
-            MasteryCombatTick = Config.Bind("Mastery", "Mastery Value/Combat Ticks", 5, "Configure the amount of mastery gained per combat ticks. (5 -> 0.005%)");
-            MasteryMaxCombatTicks = Config.Bind("Mastery", "Max Combat Ticks", 12, "Mastery will no longer increase after this many ticks is reached in combat. (1 tick = 5 seconds)");
-            WeaponMasterMultiplier = Config.Bind("Mastery", "Mastery Multiplier", 1f, "Multiply the gained mastery value by this amount.");
-            WeaponMastery_VBloodMultiplier = Config.Bind("Mastery", "VBlood Mastery Multiplier", 15f, "Multiply Mastery gained from VBlood kill.");
-            WeaponDecayInterval = Config.Bind("Mastery", "Decay Interval", 60, "Every amount of seconds the user is offline by the configured value will translate as 1 decay tick.");
-            Offline_Weapon_MasteryDecayValue = Config.Bind("Mastery", "Decay Value", 1, "Mastery will decay by this amount for every decay tick.(1 -> 0.001%)");
-
-            EnableWorldDynamics = Config.Bind("World Dynamics", "Enable Faction Dynamics", true, "All other faction dynamics data & config is withing /OpenRPG/Saves/factionstats.json file.");
-
-            if (!Directory.Exists(ConfigPath)) Directory.CreateDirectory(ConfigPath);
-            if (!Directory.Exists(SavesPath)) Directory.CreateDirectory(SavesPath);
-
-            if (!File.Exists(KitsRootJson))
+            if (WaypointsActive)
             {
-                var stream = File.Create(KitsRootJson);
-                stream.Dispose();
+                WaypointCommands.WaypointLimit = Config.Bind("Config", "Waypoint Limit", 2, "Set a waypoint limit for per non-admin user.").Value;
             }
+            
+            AutoSaveSystem.AutoSaveFrequency = Config.Bind("Auto-save", "Frequency", 0, "Enable and set the frequency for auto-saving the database. 0 is disabled, 1 is every time the server saves, 2 is every second time, etc.").Value;
+            AutoSaveSystem.BackupFrequency = Config.Bind("Auto-save", "Backup", 0, "Enable and set the frequency for saving to the backup folder. The backup save will run every X saves. 0 to disable.").Value;
         }
 
         public override void Load()
         {
-            InitConfig();
-            CommandRegistry.RegisterAll();
+            // Ensure the logger is accessible in static contexts.
+            _logger = base.Log;
+            if(!IsServer)
+            {
+                Plugin.Log(LogSystem.Core, LogLevel.Warning, $"This is a server plugin. Not continuing to load on client.", true);
+                return;
+            }
+            
+            InitCoreConfig();
             GameData.OnInitialize += GameDataOnInitialize;
             GameData.OnDestroy += GameDataOnDestroy;
+            
             Instance = this;
-            RandomEncounters.Load();
-            Logger = Log;
+            GameFrame.Initialize();
+            
+            // Load command registry for systems that are active
+            // Note: Displaying these in alphabetical order for ease of maintenance
+            if (PlayerGroupsActive) CommandRegistry.RegisterCommandType(typeof(AllianceCommands));
+            if (BloodlineSystemActive) CommandRegistry.RegisterCommandType(typeof(BloodlineCommands));
+            CommandRegistry.RegisterCommandType(typeof(CacheCommands));
+            if (ExperienceSystemActive) CommandRegistry.RegisterCommandType(typeof(ExperienceSystem));
+            if (WeaponMasterySystemActive) CommandRegistry.RegisterCommandType(typeof(MasteryCommands));
+            CommandRegistry.RegisterCommandType(typeof(PermissionCommands));
+            CommandRegistry.RegisterCommandType(typeof(PlayerInfoCommands));
+            if (PowerUpCommandsActive) CommandRegistry.RegisterCommandType(typeof(PowerUpCommands)); // Currently unused.
+            if (RandomEncountersSystemActive) CommandRegistry.RegisterCommandType(typeof(RandomEncountersCommands));
+            if (WantedSystemActive) CommandRegistry.RegisterCommandType(typeof(WantedCommands));
+            if (WaypointsActive) CommandRegistry.RegisterCommandType(typeof(WaypointCommands));
+            
+            
             harmony = new Harmony(MyPluginInfo.PLUGIN_GUID);
             harmony.PatchAll(Assembly.GetExecutingAssembly());
 
-            Log.LogInfo($"Plugin {MyPluginInfo.PLUGIN_GUID} is loaded!");
+            Plugin.Log(LogSystem.Core, LogLevel.Info, $"Plugin is loaded [version: {MyPluginInfo.PLUGIN_VERSION}]", true);
         }
 
         private static void GameDataOnInitialize(World world)
         {
-            initServer = true;
-            RandomEncounters.GameData_OnInitialize();
-            RandomEncounters._encounterTimer = new Timer();
-            if (RandomEncountersConfig.Enabled.Value)
+            if (RandomEncountersSystemActive)
             {
+                RandomEncounters.GameData_OnInitialize();
+                RandomEncounters.EncounterTimer = new Timer();
                 RandomEncounters.StartEncounterTimer();
             }
-            TaskRunner.Initialize();
+            
             Initialize();
         }
 
         private static void GameDataOnDestroy()
         {
-            //Logger.LogInfo("GameDataOnDestroy");
         }
 
         public override bool Unload()
         {
-            AutoSaveSystem.SaveDatabase();
             Config.Clear();
             harmony.UnpatchSelf();
-
-            TaskRunner.Destroy();
-            RandomEncounters.Unload();
             return true;
         }
 
         public static void Initialize()
         {
+            Plugin.Log(LogSystem.Core, LogLevel.Warning, $"Trying to Initialize {MyPluginInfo.PLUGIN_NAME}: isInitialized == {IsInitialized}", IsInitialized);
+            if (IsInitialized) return;
+            Plugin.Log(LogSystem.Core, LogLevel.Info, $"Initializing {MyPluginInfo.PLUGIN_NAME}...", true);
+            
             //-- Initialize System
-            Helper.CreatePlayerCache();
-            Helper.GetServerGameSettings(out Helper.SGS);
-            Helper.GetServerGameManager(out Helper.SGM);
-            Helper.GetUserActivityGridSystem(out Helper.UAGS);
-            ProximityLoop.UpdateCache();
-            PvPSystem.Interlocked.isSiegeOn = false;
-
-            if (isInitialized) return;
-
-            //-- Commands Related
-            AutoSaveSystem.LoadDatabase();
+            // Pre-initialise some constants
+            Helper.GetServerGameSettings(out _);
+            Helper.GetServerGameManager(out _);
+            Helper.GetUserActivityGridSystem(out _);
+            
+            DebugLoggingConfig.Initialize();
+            if (BloodlineSystemActive) BloodlineConfig.Initialize();
+            if (ExperienceSystemActive) ExperienceConfig.Initialize();
+            if (WeaponMasterySystemActive) MasteryConfig.Initialize();
+            if (WantedSystemActive) WantedConfig.Initialize();
 
             //-- Apply configs
-            Waypoint.WaypointLimit = WaypointLimit.Value;
-
-            PermissionSystem.isVIPSystem = EnableVIPSystem.Value;
-            PermissionSystem.isVIPWhitelist = EnableVIPWhitelist.Value;
-            PermissionSystem.VIP_Permission = VIP_Permission.Value;
-
-            PermissionSystem.VIP_InCombat_ResYield = VIP_InCombat_ResYield.Value;
-            PermissionSystem.VIP_InCombat_DurabilityLoss = VIP_InCombat_DurabilityLoss.Value;
-            PermissionSystem.VIP_InCombat_MoveSpeed = VIP_InCombat_MoveSpeed.Value;
-            PermissionSystem.VIP_InCombat_GarlicResistance = VIP_InCombat_GarlicResistance.Value;
-            PermissionSystem.VIP_InCombat_SilverResistance = VIP_InCombat_SilverResistance.Value;
-
-            PermissionSystem.VIP_OutCombat_ResYield = VIP_OutCombat_ResYield.Value;
-            PermissionSystem.VIP_OutCombat_DurabilityLoss = VIP_OutCombat_DurabilityLoss.Value;
-            PermissionSystem.VIP_OutCombat_MoveSpeed = VIP_OutCombat_MoveSpeed.Value;
-            PermissionSystem.VIP_OutCombat_GarlicResistance = VIP_OutCombat_GarlicResistance.Value;
-            PermissionSystem.VIP_OutCombat_SilverResistance = VIP_OutCombat_SilverResistance.Value;
-
-            HunterHuntedSystem.isActive = HunterHuntedEnabled.Value;
-            HunterHuntedSystem.heat_cooldown = HeatCooldown.Value;
-            HunterHuntedSystem.bandit_heat_cooldown = BanditHeatCooldown.Value;
-            HunterHuntedSystem.cooldown_timer = CoolDown_Interval.Value;
-            HunterHuntedSystem.ambush_interval = Ambush_Interval.Value;
-            HunterHuntedSystem.ambush_chance = Ambush_Chance.Value;
-
-            if (Ambush_Despawn_Unit_Timer.Value < 1) Ambush_Despawn_Unit_Timer.Value = 300f;
-            HunterHuntedSystem.ambush_despawn_timer = Ambush_Despawn_Unit_Timer.Value + 0.44444f;
-
-            PvPSystem.isPvPToggleEnabled = EnablePvPToggle.Value;
-            PvPSystem.isAnnounceKills = AnnouncePvPKills.Value;
-
-            PvPSystem.isHonorSystemEnabled = EnableHonorSystem.Value;
-            PvPSystem.isHonorTitleEnabled = EnableHonorTitle.Value;
-            PvPSystem.MaxHonorGainPerSpan = MaxHonorGainPerSpan.Value;
-            PvPSystem.SiegeDuration = HonorSiegeDuration.Value;
-            PvPSystem.isHonorBenefitEnabled = EnableHonorBenefit.Value;
-            PvPSystem.isEnableHostileGlow = EnableHostileGlow.Value;
-            PvPSystem.isUseProximityGlow = UseProximityGlow.Value;
-
-            PvPSystem.isLadderEnabled = EnablePvPLadder.Value;
-            PvPSystem.LadderLength = PvPLadderLength.Value;
-            PvPSystem.isSortByHonor = HonorSortLadder.Value;
             
-            PvPSystem.isPunishEnabled = EnablePvPPunish.Value;
-            PvPSystem.isAnnounceGrief = EnablePvPPunishAnnounce.Value;
-            PvPSystem.isExcludeOffline = ExcludeOfflineKills.Value;
-            PvPSystem.PunishLevelDiff = PunishLevelDiff.Value;
-            PvPSystem.PunishDuration = PunishDuration.Value;
-            PvPSystem.OffenseLimit = PunishOffenseLimit.Value;
-            PvPSystem.Offense_Cooldown = PunishOffenseCooldown.Value;
-
-            SiegeSystem.isSiegeBuff = BuffSiegeGolem.Value;
-            SiegeSystem.GolemPDef.Value = GolemPhysicalReduction.Value;
-            SiegeSystem.GolemSDef.Value = GolemSpellReduction.Value;
-
-            ExperienceSystem.isEXPActive = EnableExperienceSystem.Value;
-            ExperienceSystem.MaxLevel = MaxLevel.Value;
-            ExperienceSystem.EXPMultiplier = EXPMultiplier.Value;
-            ExperienceSystem.VBloodMultiplier = VBloodEXPMultiplier.Value;
-            ExperienceSystem.EXPLostOnDeath = EXPLostOnDeath.Value;
-            ExperienceSystem.EXPConstant = EXPFormula_1.Value;
-            ExperienceSystem.GroupModifier = EXPGroupModifier.Value;
-            ExperienceSystem.GroupMaxDistance = EXPGroupMaxDistance.Value;
-
-            WeaponMasterSystem.isMasteryEnabled = EnableWeaponMaster.Value;
-            WeaponMasterSystem.isDecaySystemEnabled = EnableWeaponMasterDecay.Value;
-            WeaponMasterSystem.Offline_DecayValue = Offline_Weapon_MasteryDecayValue.Value;
-            WeaponMasterSystem.DecayInterval = WeaponDecayInterval.Value;
-            WeaponMasterSystem.VBloodMultiplier = WeaponMastery_VBloodMultiplier.Value;
-            WeaponMasterSystem.MasteryMultiplier = WeaponMasterMultiplier.Value;
-            WeaponMasterSystem.MaxMastery = WeaponMaxMastery.Value;
-            WeaponMasterSystem.MasteryCombatTick = MasteryCombatTick.Value;
-            WeaponMasterSystem.MaxCombatTick = MasteryMaxCombatTicks.Value;
-
-            WorldDynamicsSystem.isFactionDynamic = EnableWorldDynamics.Value;
-
-            isInitialized = true;
-
+            Plugin.Log(LogSystem.Core, LogLevel.Info, "Initialising player cache and internal database...");
+            Helper.CreatePlayerCache();
+            AutoSaveSystem.LoadOrInitialiseDatabase();
             
+            // Validate any potential change in permissions
+            var commands = Command.GetAllCommands();
+            Command.ValidatedCommandPermissions(commands);
+            // Note for devs: To regenerate Command.md and PermissionSystem.DefaultCommandPermissions, uncomment the following:
+            // TODO re-comment out this.
+            Command.GenerateCommandMd(commands);
+            Command.GenerateDefaultCommandPermissions(commands);
+            
+            Plugin.Log(LogSystem.Core, LogLevel.Info, $"Setting CommandRegistry middleware");
+            if (_disableCommandAdminRequirement)
+            {
+                Plugin.Log(LogSystem.Core, LogLevel.Info, "Removing admin privilege requirements");
+                CommandRegistry.Middlewares.Clear();                
+            }
+            CommandRegistry.Middlewares.Add(new Command.PermissionMiddleware());
+
+            Plugin.Log(LogSystem.Core, LogLevel.Info, "Finished initialising", true);
+
+            IsInitialized = true;
+        }
+
+        public enum LogSystem
+        {
+            Alliance,
+            Bloodline,
+            Buff,
+            Core,
+            Death,
+            Faction,
+            Mastery,
+            PowerUp,
+            RandomEncounter,
+            SquadSpawn,
+            Wanted,
+            Xp
+        }
+        
+        public new static void Log(LogSystem system, LogLevel logLevel, string message, bool forceLog = false)
+        {
+            var isLogging = forceLog || DebugLoggingConfig.IsLogging(system);
+            if (isLogging) _logger.Log(logLevel, $"{DateTime.Now.ToString("u")}: [{Enum.GetName(system)}] {message}");
+        }
+        
+        // Log overload to allow potentially more computationally expensive logs to be hidden when not being logged
+        public new static void Log(LogSystem system, LogLevel logLevel, Func<string> messageGenerator)
+        {
+            Log(system, logLevel, messageGenerator());
         }
     }
 }

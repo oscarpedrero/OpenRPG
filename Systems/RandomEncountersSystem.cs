@@ -4,20 +4,19 @@ using ProjectM;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using Unity.Collections;
 using Unity.Entities;
-using Unity.Mathematics;
 using VRising.GameData.Models;
 using VRising.GameData;
 using OpenRPG.Configuration;
 using System.Collections.Concurrent;
+using BepInEx.Logging;
 using VRising.GameData.Methods;
+using LogSystem = OpenRPG.Plugin.LogSystem;
 
 namespace OpenRPG.Systems
 {
-    internal class RandomEncountersSystem
+    internal static class RandomEncountersSystem
     {
         private static readonly ConcurrentDictionary<ulong, ConcurrentDictionary<int, ItemDataModel>> RewardsMap = new();
 
@@ -29,7 +28,8 @@ namespace OpenRPG.Systems
 
         internal static Dictionary<long, (float actualDuration, Action<Entity> Actions)> PostActions = new();
 
-        public static System.Random Random = new System.Random();
+        private static System.Random Random = new System.Random();
+        private const LogSystem LoggingSystem = LogSystem.RandomEncounter;
 
         internal static void StartEncounter(UserModel user = null)
         {
@@ -52,25 +52,23 @@ namespace OpenRPG.Systems
 
             if (user == null)
             {
-                Plugin.Logger.LogMessage("Could not find any eligible players for a random encounter...");
+                Plugin.Log(LoggingSystem, LogLevel.Message, "Could not find any eligible players for a random encounter...");
                 return;
             }
 
             var npc = DataFactory.GetRandomNpc(user.Character.Equipment.Level);
             if (npc == null)
             {
-                Plugin.Logger.LogWarning($"Could not find any NPCs within the given level range. (User Level: {user.Character.Equipment.Level})");
+                Plugin.Log(LoggingSystem, LogLevel.Warning,$"Could not find any NPCs within the given level range. , User Level: {user.Character.Equipment.Level})");
                 return;
             }
-            Plugin.Logger.LogMessage($"Attempting to start a new encounter for {user.CharacterName} with {npc.Name}");
+            Plugin.Log(LoggingSystem, LogLevel.Message, $"Attempting to start a new encounter for {user.CharacterName} with {npc.Name}");
             var minSpawnDistance = RandomEncountersConfig.MinSpawnDistance.Value;
             var maxSpawnDistance = RandomEncountersConfig.MaxSpawnDistance.Value;
             try
             {
-
                 NpcPlayerMap[npc.Id] = user;
-
-                var spawnPosition = new float3(user.Position.x, user.Position.y, user.Position.z); // TODO: investigate this copypasta
+                var spawnPosition = user.Position;
 
                 world.GetExistingSystem<UnitSpawnerUpdateSystem>()
                     .SpawnUnit(StationEntity, new PrefabGUID(npc.Id), spawnPosition, 1, minSpawnDistance, maxSpawnDistance, Lifetime);
@@ -78,17 +76,13 @@ namespace OpenRPG.Systems
             }
             catch (Exception ex)
             {
-                Plugin.Logger.LogError(ex);
+                Plugin.Log(LoggingSystem, LogLevel.Error, $"RE Failed spawning unit {ex}");
                 // Suppress
             }
-            //TaskRunner.Start(taskWorld => AfterSpawn(user.PlatformId, taskWorld, npc), TimeSpan.FromMilliseconds(1000));
         }
 
-        internal static void ServerEvents_OnUnitSpawned(World world, Entity entity)
+        internal static void ServerEvents_OnUnitSpawned(EntityManager entityManager, Entity entity)
         {
-
-
-            var entityManager = world.EntityManager;
             if (!entityManager.HasComponent<PrefabGUID>(entity))
             {
                 return;
@@ -127,11 +121,11 @@ namespace OpenRPG.Systems
                     npcData.Name, Lifetime);
 
             user.SendSystemMessage(message);
-            Plugin.Logger.LogInfo($"Encounters started: {user.CharacterName} vs. {npcData.Name}");
+            Plugin.Log(LoggingSystem, LogLevel.Info, $"Encounters started: {user.CharacterName} vs. {npcData.Name}");
 
             if (RandomEncountersConfig.NotifyAdminsAboutEncountersAndRewards.Value)
             {
-                var onlineAdmins = DataFactory.GetOnlineAdmins(world);
+                var onlineAdmins = DataFactory.GetOnlineAdmins();
                 foreach (var onlineAdmin in onlineAdmins)
                 {
                     onlineAdmin.SendSystemMessage($"Encounter started: {user.CharacterName} vs. {npcData.Name}");
@@ -165,7 +159,7 @@ namespace OpenRPG.Systems
                     var message = string.Format(RandomEncountersConfig.RewardMessageTemplate.Value, itemModel.Color, itemModel.Name);
                     userModel.SendSystemMessage(message);
                     bounties.TryRemove(deathEvent.Died.Index, out _);
-                    Plugin.Logger.LogInfo($"{userModel.CharacterName} earned reward: {itemModel.Name}");
+                    Plugin.Log(LoggingSystem, LogLevel.Info, $"{userModel.CharacterName} earned reward: {itemModel.Name}");
                     var globalMessage = string.Format(RandomEncountersConfig.RewardAnnouncementMessageTemplate.Value,
                         userModel.CharacterName, itemModel.Color, itemModel.Name);
                     if (RandomEncountersConfig.NotifyAllPlayersAboutRewards.Value)
@@ -179,7 +173,7 @@ namespace OpenRPG.Systems
                     }
                     else if (RandomEncountersConfig.NotifyAdminsAboutEncountersAndRewards.Value)
                     {
-                        var onlineAdmins = DataFactory.GetOnlineAdmins(sender.World);
+                        var onlineAdmins = DataFactory.GetOnlineAdmins();
                         foreach (var onlineAdmin in onlineAdmins)
                         {
                             onlineAdmin.SendSystemMessage($"{userModel.CharacterName} earned an encounter reward: <color={itemModel.Color}>{itemModel.Name}</color>");
